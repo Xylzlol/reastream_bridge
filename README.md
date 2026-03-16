@@ -1,14 +1,16 @@
 # ReaStream Bridge
 
-Routes desktop audio into FL Studio over UDP using the [ReaStream](https://www.reaper.fm/reaplugs/) protocol. Fixes the WDM/ASIO clock drift crackling you get with VSTHost and similar tools.
+Routes desktop audio into any DAW over UDP using the [ReaStream](https://www.reaper.fm/reaplugs/) protocol. Fixes the WDM/ASIO clock drift crackling you get with VSTHost and similar tools.
+
+Works with any DAW that can load VST plugins — FL Studio, Reaper, Ableton, Cubase, Bitwig, etc. Just load ReaStream as a VST on a track/mixer channel and set it to receive.
 
 ```
-Spotify/Discord/etc → VB-Cable → [ReaStream Bridge] → UDP → FL Studio
+Spotify/Discord/etc → VB-Cable → [ReaStream Bridge] → UDP → Your DAW
 ```
 
 ## Why this exists
 
-FL Studio runs on ASIO (hardware clock). Desktop apps use WASAPI/WDM (Windows clock). These clocks drift apart over time, causing crackling. This bridge captures from VB-Cable in WASAPI exclusive mode, buffers 2 seconds of audio, and uses a PI controller to keep the buffer centered at 50% — absorbing drift silently.
+DAWs typically run on ASIO (hardware clock). Desktop apps use WASAPI/WDM (Windows clock). These clocks drift apart over time, causing crackling. This bridge captures from VB-Cable in WASAPI exclusive mode, buffers 2 seconds of audio, and uses a PI controller to keep the buffer centered at 50% — absorbing drift silently.
 
 ## Setup
 
@@ -28,11 +30,13 @@ pip install -r requirements.txt
 
 2. **Desktop app output**: Set whatever app you want to route (Spotify, Discord, browser, etc.) to output to "CABLE Input (VB-Cable)".
 
-3. **FL Studio**:
+3. **Your DAW** (FL Studio example, but any DAW works):
    - Audio settings → make sure sample rate is **44100 Hz** (must match VB-Cable)
    - Add **ReaStream** (from ReaPlugs) to a mixer insert
    - Set ReaStream to **Receive** mode
    - Set the identifier to `default`
+
+4. **FL Studio only — fixed size buffers**: Go to Options → Audio Settings → open the **Troubleshooting** section → enable **Fixed size buffers**. Without this, FL Studio feeds ReaStream variable-length audio blocks, which causes it to drop incoming UDP packets and you'll get silence or stuttering. This doesn't affect other DAWs.
 
 ### The `default` identifier
 
