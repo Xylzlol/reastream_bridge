@@ -36,7 +36,7 @@ Your instruments stay on ASIO with minimal latency. Spotify audio arrives throug
 
 [Voxengo Recorder](https://www.voxengo.com/product/recorder/) is a free VST plugin that mirrors your DAW's master output to an MME device, which is what Discord can capture during screenshare.
 
-![Voxengo Recorder settings](voxengo_settings.png)
+![Voxengo Recorder settings](voxengosettings.png)
 
 1. Download and install [Voxengo Recorder](https://www.voxengo.com/product/recorder/)
 2. Load it as a VST on your DAW's master bus
@@ -65,25 +65,30 @@ pip install -r requirements.txt
 
 2. **Desktop app output**: Set whatever app you want to route (Spotify, Discord, browser, etc.) to output to "CABLE Input (VB-Cable)".
 
-3. **Your DAW** (FL Studio example, but any DAW works):
-   - Audio settings → make sure sample rate is **44100 Hz** (must match VB-Cable)
-   - Add **ReaStream** (from ReaPlugs) to a mixer insert
-   - Set ReaStream to **Receive** mode
-   - Set the identifier to `default`
+3. **ReaStream plugin in your DAW**: Download and install [ReaPlugs VST](https://www.reaper.fm/reaplugs/). Add ReaStream to any mixer channel — it doesn't have to be the master, any insert/channel works. Set it to **Receive audio/MIDI**, check **Enabled**, and leave the identifier as `default`.
 
-4. **FL Studio only — fixed size buffers**: Go to Options → Audio Settings → open the **Troubleshooting** section → enable **Fixed size buffers**. Without this, FL Studio feeds ReaStream variable-length audio blocks, which causes it to drop incoming UDP packets and you'll get silence or stuttering. This doesn't affect other DAWs.
+   ![ReaStream plugin settings](reastreamsettings.png)
+
+4. **FL Studio only — fixed size buffers**: Open the ReaStream plugin window, click the **gear icon** (VST wrapper settings), go to the **Troubleshooting** tab, and enable **Use fixed size buffers**. Without this, FL Studio feeds ReaStream variable-length audio blocks, which causes it to drop incoming UDP packets and you'll get silence or stuttering. This doesn't affect other DAWs.
+
+   ![FL Studio VST Troubleshooting — enable Use fixed size buffers](fixedsizebuffers.png)
 
 ### The `default` identifier
 
 ReaStream uses a text identifier to match senders and receivers on the same network. Both sides must use the same string. This bridge sends on identifier `default` by default, which matches ReaStream's own default. If you're running multiple bridges or have other ReaStream traffic, change it with `--reastream-id myname` and set the same string in the ReaStream plugin.
 
 ### Run
+
+You can just double-click `reastream_bridge.py` if Python is in your PATH, or run it from the command line for more control:
+
 ```
 python reastream_bridge.py -d auto              # auto-detect VB-Cable
 python reastream_bridge.py --list               # list audio devices
 python reastream_bridge.py -d auto --test-tone  # 440 Hz sine to verify the chain
-python reastream_bridge.py -d auto -r 48000     # match FL Studio at 48k
+python reastream_bridge.py -d auto -r 48000     # match your DAW at 48k
 ```
+
+`start_bridge.bat` does the same thing but also checks for Python and installs dependencies if missing — handy if you're setting this up for the first time or on someone else's machine.
 
 ### System tray mode
 ```
