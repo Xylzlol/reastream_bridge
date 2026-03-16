@@ -83,7 +83,7 @@ class RingBuffer:
     def __init__(self, capacity_frames, channels):
         self.capacity = capacity_frames
         self.channels = channels
-        self.buf = np.zeros((capacity_frames, channels), dtype=np.float64)
+        self.buf = np.zeros((capacity_frames, channels), dtype=np.float32)
         self.write_pos = 0
         self.read_pos = 0
         self.available = 0
@@ -113,7 +113,7 @@ class RingBuffer:
         with self._lock:
             n = min(frames, self.available)
             if n == 0:
-                return np.zeros((0, self.channels), dtype=np.float64)
+                return np.zeros((0, self.channels), dtype=np.float32)
             rp = self.read_pos
             end = rp + n
             if end <= self.capacity:
@@ -134,25 +134,33 @@ class RingBuffer:
 # ---------------------------------------------------------------------------
 # ReaStream packet builder
 # ---------------------------------------------------------------------------
-def build_reastream_packets(audio, identifier, sample_rate, channels):
+def make_packet_builder(identifier, sample_rate, channels):
+    """Return a closure that builds ReaStream packets without per-call overhead."""
     ident_bytes = identifier.encode("ascii")[:32].ljust(32, b"\x00")
     max_frames = REASTREAM_MAX_AUDIO_BYTES // (channels * 4)
-    packets = []
-    total_frames = audio.shape[0]
-    offset = 0
-    while offset < total_frames:
-        n = min(max_frames, total_frames - offset)
-        chunk = audio[offset : offset + n]
-        audio_bytes = chunk.T.astype(np.float32).tobytes()  # non-interleaved
-        chunk_len = len(audio_bytes)
-        total_size = REASTREAM_HEADER_SIZE + chunk_len
-        header = struct.pack(
-            REASTREAM_HEADER_FMT, REASTREAM_MAGIC_AUDIO, total_size,
-            ident_bytes, channels, sample_rate, chunk_len,
-        )
-        packets.append(header + audio_bytes)
-        offset += n
-    return packets
+    # Pre-pack the static portion of the header (magic + placeholder size + ident + ch + rate)
+    # We still need to pack per-packet because pkt_size and audio_bytes vary for the last chunk.
+    pack = struct.pack
+
+    def build(audio):
+        packets = []
+        total_frames = audio.shape[0]
+        offset = 0
+        while offset < total_frames:
+            n = min(max_frames, total_frames - offset)
+            chunk = audio[offset : offset + n]
+            audio_raw = chunk.T.astype(np.float32).tobytes()  # non-interleaved
+            chunk_len = len(audio_raw)
+            total_size = REASTREAM_HEADER_SIZE + chunk_len
+            header = pack(
+                REASTREAM_HEADER_FMT, REASTREAM_MAGIC_AUDIO, total_size,
+                ident_bytes, channels, sample_rate, chunk_len,
+            )
+            packets.append(header + audio_raw)
+            offset += n
+        return packets
+
+    return build
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +196,7 @@ class ReaStreamBridge:
     def _capture_cb(self, indata, frames, time_info, status):
         self._capture_frames += indata.shape[0]
         self._capture_callbacks += 1
-        self.ring.write(indata.astype(np.float64))
+        self.ring.write(indata)
 
     def _tone_generator(self):
         freq = 440.0
@@ -211,10 +219,22 @@ class ReaStreamBridge:
         _set_thread_priority_high()
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 262144)
+        except OSError:
+            pass
         dest = (self.target_ip, self.reastream_port)
+        sendto = sock.sendto  # avoid attribute lookup in hot loop
         send_block = self.send_block
         out_rate = self.output_rate
         send_interval = send_block / out_rate  # e.g. 512/44100 = 11.6ms
+        build_packets = make_packet_builder(self.reastream_id, out_rate, self.channels)
+
+        # Pre-allocate resampling arrays (PI correction keeps read count near send_block,
+        # so we size for ±10% and lazily reallocate only if that's exceeded)
+        _resample_cap = int(send_block * 1.15)
+        _resample_indices = np.linspace(0, 1, send_block, dtype=np.float32)
+        _resample_frac = np.empty((send_block, 1), dtype=np.float32)
 
         # Wait for buffer to reach target fill
         print("  Filling buffer...")
@@ -230,7 +250,8 @@ class ReaStreamBridge:
         integral_error = 0.0
         sample_debt = 0.0
 
-        next_send = time.perf_counter()
+        perf_counter = time.perf_counter
+        next_send = perf_counter()
         stats_t = next_send
         pkts = 0
         underruns = 0
@@ -238,7 +259,7 @@ class ReaStreamBridge:
         frames_sent = 0
 
         while self.running:
-            now = time.perf_counter()
+            now = perf_counter()
             if now < next_send:
                 sleep_for = next_send - now
                 if sleep_for > 0.0002:
@@ -269,15 +290,19 @@ class ReaStreamBridge:
             # Resample to exactly send_block if PI adjusted the read count
             actual = data.shape[0]
             if actual != send_block and actual >= 2:
-                indices = np.linspace(0, actual - 1, send_block)
-                idx_floor = np.floor(indices).astype(int)
-                frac = indices - idx_floor
+                # Reallocate index arrays only when source length exceeds pre-allocated capacity
+                if actual > _resample_cap:
+                    _resample_cap = int(actual * 1.15)
+                scaled = _resample_indices * (actual - 1)
+                idx_floor = scaled.astype(np.intp)
+                np.subtract(scaled, idx_floor, out=_resample_frac[:, 0])
                 idx_ceil = np.minimum(idx_floor + 1, actual - 1)
-                data = data[idx_floor] * (1.0 - frac[:, None]) + data[idx_ceil] * frac[:, None]
+                inv_frac = 1.0 - _resample_frac
+                data = data[idx_floor] * inv_frac + data[idx_ceil] * _resample_frac
 
-            for pkt in build_reastream_packets(data, self.reastream_id, out_rate, self.channels):
+            for pkt in build_packets(data):
                 try:
-                    sock.sendto(pkt, dest)
+                    sendto(pkt, dest)
                     pkts += 1
                 except OSError as e:
                     print(f"  [!] Send error: {e}")

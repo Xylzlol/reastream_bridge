@@ -1,67 +1,94 @@
 # ReaStream Bridge
 
-Routes Spotify audio into FL Studio via ReaStream UDP, solving the WDM/ASIO clock drift problem that causes crackling in VSTHost and similar tools.
+Routes desktop audio into FL Studio over UDP using the [ReaStream](https://www.reaper.fm/reaplugs/) protocol. Fixes the WDM/ASIO clock drift crackling you get with VSTHost and similar tools.
 
 ```
-Spotify → VB-Cable → [ReaStream Bridge] → ReaStream UDP → FL Studio
+Spotify/Discord/etc → VB-Cable → [ReaStream Bridge] → UDP → FL Studio
 ```
 
-## Why
+## Why this exists
 
-FL Studio uses ASIO (hardware clock). Spotify uses WASAPI/WDM (Windows clock). These two clocks drift apart, causing crackling. This bridge captures from VB-Cable in **WASAPI exclusive mode**, buffers generously (2s), and sends on a precise timer with a PI controller that keeps the buffer centered — absorbing drift silently.
+FL Studio runs on ASIO (hardware clock). Desktop apps use WASAPI/WDM (Windows clock). These clocks drift apart over time, causing crackling. This bridge captures from VB-Cable in WASAPI exclusive mode, buffers 2 seconds of audio, and uses a PI controller to keep the buffer centered at 50% — absorbing drift silently.
 
 ## Setup
 
 ### Prerequisites
-- [VB-Cable](https://vb-audio.com/Cable/) — set as Spotify's output device
-- [FL Studio](https://www.image-line.com/) with ReaStream receiver plugin on the mixer
+- [VB-Cable](https://vb-audio.com/Cable/) — virtual audio cable (free)
+- [ReaPlugs VST](https://www.reaper.fm/reaplugs/) — contains the ReaStream plugin
 - Python 3.10+
 
 ### Install
-```bash
+```
 pip install -r requirements.txt
 ```
 
 ### Configure
-1. **Windows Sound Settings**: Set VB-Cable (both Playback "CABLE Input" and Recording "CABLE Output") to **44100 Hz**
-2. **Spotify**: Output device → CABLE Input (VB-Cable)
-3. **FL Studio**: Audio settings → sample rate **44100 Hz**. Add **ReaStream** plugin to a mixer channel, set to "Receive" on identifier `default`
+
+1. **VB-Cable sample rate**: Open Windows Sound Settings → Playback → "CABLE Input" → Properties → Advanced → set to **44100 Hz**. Do the same for Recording → "CABLE Output".
+
+2. **Desktop app output**: Set whatever app you want to route (Spotify, Discord, browser, etc.) to output to "CABLE Input (VB-Cable)".
+
+3. **FL Studio**:
+   - Audio settings → make sure sample rate is **44100 Hz** (must match VB-Cable)
+   - Add **ReaStream** (from ReaPlugs) to a mixer insert
+   - Set ReaStream to **Receive** mode
+   - Set the identifier to `default`
+
+### The `default` identifier
+
+ReaStream uses a text identifier to match senders and receivers on the same network. Both sides must use the same string. This bridge sends on identifier `default` by default, which matches ReaStream's own default. If you're running multiple bridges or have other ReaStream traffic, change it with `--reastream-id myname` and set the same string in the ReaStream plugin.
 
 ### Run
-```bash
-# Auto-detect VB-Cable and bridge to FL Studio
-python reastream_bridge.py -d auto
-
-# List devices (find your VB-Cable index)
-python reastream_bridge.py --list
-
-# Test with 440 Hz sine (verify chain without Spotify)
-python reastream_bridge.py -d auto --test-tone
-
-# Use 48000 Hz (match your FL Studio if it's not at 44100)
-python reastream_bridge.py -d auto -r 48000
+```
+python reastream_bridge.py -d auto              # auto-detect VB-Cable
+python reastream_bridge.py --list               # list audio devices
+python reastream_bridge.py -d auto --test-tone  # 440 Hz sine to verify the chain
+python reastream_bridge.py -d auto -r 48000     # match FL Studio at 48k
 ```
 
-### Run in system tray (silent)
-```bash
-pip install pystray Pillow
+### System tray mode
+```
 pythonw bridge_tray.pyw
 ```
-Green "R" appears in system tray. Hover for buffer status, right-click to quit.
+Green "R" icon in the tray. Hover for buffer status, right-click to quit.
 
 ### Auto-start on login
-Double-click `install_startup.bat` — creates a shortcut in `shell:startup`.
-To remove: run `remove_startup.bat`.
+Run `install_startup.bat` — creates a startup shortcut for the tray app. Remove with `remove_startup.bat`.
 
-## How it works
+## Deep setup — WASAPI exclusive mode
 
-1. **WASAPI exclusive capture** (`blocksize=0`) — bypasses the Windows audio mixer, gets frames directly from VB-Cable at the exact sample rate with no frame drops
-2. **Ring buffer** (2 seconds) — absorbs any jitter or timing variation
-3. **Timer-driven sender** — fires every `send_block / sample_rate` seconds, locked to the output clock
-4. **PI controller** — monitors buffer fill level (target 50%) and micro-adjusts the read amount per cycle to keep input and output rates matched. Correction stays within ~0.1% under normal conditions
-5. **ReaStream UDP packets** — reverse-engineered wire format matching VSTHost: 47-byte header, non-interleaved float32 audio, max 1200 bytes per packet
+The bridge tries three capture modes in order:
 
-## ReaStream wire format
+1. **WASAPI exclusive** — bypasses the Windows audio mixer entirely. Direct device access, no resampling, no mixing. This is the best mode. For it to work, VB-Cable's sample rate in Windows Sound Settings *must exactly match* the `--rate` argument (default 44100).
+
+2. **WASAPI shared + auto_convert** — falls back here if exclusive fails (e.g. another app has exclusive access). Windows handles resampling. Slightly more latency, still works fine.
+
+3. **WASAPI shared (plain)** — last resort. May have sample rate mismatches.
+
+The bridge uses `blocksize=0` in all modes, which tells PortAudio to deliver frames as they arrive from the hardware instead of rebuffering into fixed-size chunks. This avoids the frame-drop bug that plagues VSTHost.
+
+### Tuning
+
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `-b` | `2.0` | Ring buffer size in seconds. Larger = more latency but more resilient to jitter. 2s is plenty. |
+| `--send-block` | `512` | Frames per send cycle. Smaller = lower latency, more CPU. 512 at 44100 Hz = ~11.6ms per cycle. |
+| `-r` | `44100` | Sample rate. Must match VB-Cable AND FL Studio. |
+| `--ip` | `127.0.0.1` | Target IP. Change for sending to another machine. |
+| `-p` | `58710` | UDP port. Standard ReaStream port. |
+
+### Debugging
+
+```
+python reastream_bridge.py --sniff         # listen for incoming ReaStream packets
+python reastream_bridge.py --sniff --sniff-count 20
+```
+
+The bridge prints stats every 5 seconds: buffer fill, capture rate, output rate, PI correction factor, and underrun count. If the correction factor drifts far from 1.00000, something is wrong with sample rate matching.
+
+## Wire format
+
+ReaStream UDP packets (reverse-engineered):
 
 ```
 Offset  Type        Field
@@ -71,7 +98,7 @@ Offset  Type        Field
 40      uint8       Channels
 41      uint32      Sample rate
 45      uint16      Audio byte count
-47      float32[]   Audio data (non-interleaved)
+47      float32[]   Audio data (non-interleaved: all ch0 samples, then all ch1 samples)
 ```
 
 ## License
