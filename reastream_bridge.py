@@ -387,20 +387,28 @@ class ReaStreamBridge:
         self._sender.start()
 
         wmode = getattr(self, '_wasapi_mode', 'test-tone')
-        print(f"""
-  ╔══════════════════════════════════════════════════════════╗
-  ║  ReaStream Bridge running                               ║
-  ╠══════════════════════════════════════════════════════════╣
-  ║  Device:      {str(self.device_index):>6s}                                 ║
-  ║  Sample rate: {self.output_rate:>6d} Hz                              ║
-  ║  WASAPI:      {wmode:<40s}  ║
-  ║  Channels:    {self.channels:>6d}                                 ║
-  ║  Send block:  {self.send_block:>6d} samples                        ║
-  ║  Buffer:      {self.buffer_seconds:>6.1f} s  (target fill 50%)          ║
-  ║  ReaStream:   {self.target_ip}:{self.reastream_port:<5d}  id="{self.reastream_id}"      ║
-  ╚══════════════════════════════════════════════════════════╝
-  Press Ctrl+C to stop.
-""")
+        reastream_str = f'{self.target_ip}:{self.reastream_port}  id="{self.reastream_id}"'
+        w = 54  # inner width between ║ chars
+        lines = [
+            "ReaStream Bridge running",
+            None,  # separator
+            f"Device:      {self.device_index}",
+            f"Sample rate: {self.output_rate} Hz",
+            f"WASAPI:      {wmode}",
+            f"Channels:    {self.channels}",
+            f"Send block:  {self.send_block} samples",
+            f"Buffer:      {self.buffer_seconds:.1f} s  (target fill 50%)",
+            f"ReaStream:   {reastream_str}",
+        ]
+        box = [f"  ╔{'═' * w}╗"]
+        for line in lines:
+            if line is None:
+                box.append(f"  ╠{'═' * w}╣")
+            else:
+                box.append(f"  ║  {line:<{w - 2}}║")
+        box.append(f"  ╚{'═' * w}╝")
+        print("\n" + "\n".join(box))
+        print("  Press Ctrl+C to stop.\n")
 
     def stop(self):
         self.running = False

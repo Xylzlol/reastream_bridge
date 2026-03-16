@@ -36,6 +36,8 @@ Your instruments stay on ASIO with minimal latency. Spotify audio arrives throug
 
 [Voxengo Recorder](https://www.voxengo.com/product/recorder/) is a free VST plugin that mirrors your DAW's master output to an MME device, which is what Discord can capture during screenshare.
 
+![Voxengo Recorder settings](voxengo_settings.png)
+
 1. Download and install [Voxengo Recorder](https://www.voxengo.com/product/recorder/)
 2. Load it as a VST on your DAW's master bus
 3. Set **Output To** to **MME**
@@ -98,9 +100,9 @@ The bridge tries three capture modes in order:
 
 1. **WASAPI exclusive** — bypasses the Windows audio mixer entirely. Direct device access, no resampling, no mixing. This is the best mode. For it to work, VB-Cable's sample rate in Windows Sound Settings *must exactly match* the `--rate` argument (default 44100).
 
-2. **WASAPI shared + auto_convert** — falls back here if exclusive fails (e.g. another app has exclusive access). Windows handles resampling. Slightly more latency, still works fine.
+2. **WASAPI shared + auto_convert** — falls back here if exclusive fails (e.g. another app has exclusive access). Windows handles resampling. Untested — may or may not work well.
 
-3. **WASAPI shared (plain)** — last resort. May have sample rate mismatches.
+3. **WASAPI shared (plain)** — last resort. Untested. May have sample rate mismatches.
 
 The bridge uses `blocksize=0` in all modes, which tells PortAudio to deliver frames as they arrive from the hardware instead of rebuffering into fixed-size chunks. This avoids the frame-drop bug that plagues VSTHost.
 
