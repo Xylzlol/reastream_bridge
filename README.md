@@ -26,8 +26,8 @@ Guitar/Mic → Audio Interface (ASIO) ──────────→ DAW mixe
                                               DAW master out → ASIO → headphones
                                                       ↓
                                               Voxengo Recorder → MME device
-                                                      ↓
-                                              Discord screenshare picks up the DAW window audio
+                                                                    ↓
+                                                Discord screenshare picks up MME device audio
 ```
 
 Instruments stay on ASIO with no added latency. Spotify comes through the bridge about 2 seconds behind, but Discord viewers don't notice since they hear everything from the same output.
