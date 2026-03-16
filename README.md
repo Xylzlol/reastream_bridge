@@ -12,6 +12,39 @@ Spotify/Discord/etc → VB-Cable → [ReaStream Bridge] → UDP → Your DAW
 
 DAWs typically run on ASIO (hardware clock). Desktop apps use WASAPI/WDM (Windows clock). These clocks drift apart over time, causing crackling. This bridge captures from VB-Cable in WASAPI exclusive mode, buffers 2 seconds of audio, and uses a PI controller to keep the buffer centered at 50% — absorbing drift silently.
 
+## Use case: low-latency instruments + Spotify over Discord screenshare
+
+The main problem this solves: you want to use ASIO in your DAW for low-latency live instrument monitoring, but you also want Spotify/YouTube/Discord audio playing inside the DAW so that when you screenshare your DAW window on Discord, viewers hear everything — your instruments and your music — synced together.
+
+The full signal chain:
+
+```
+Spotify → VB-Cable → [ReaStream Bridge] → UDP → DAW mixer (ReaStream receive)
+                                                      ↓
+Guitar/Mic → Audio Interface (ASIO) ──────────→ DAW mixer
+                                                      ↓
+                                              DAW master out → ASIO → headphones
+                                                      ↓
+                                              Voxengo Recorder → MME device
+                                                      ↓
+                                              Discord screenshare captures DAW window + audio
+```
+
+Your instruments stay on ASIO with minimal latency. Spotify audio arrives through the bridge with ~2s delay (not audible to Discord viewers since they're hearing everything through the same output). Discord screenshare picks up the DAW window audio via [Voxengo Recorder](https://www.voxengo.com/product/recorder/).
+
+### Voxengo Recorder setup
+
+[Voxengo Recorder](https://www.voxengo.com/product/recorder/) is a free VST plugin that mirrors your DAW's master output to an MME device, which is what Discord can capture during screenshare.
+
+1. Download and install [Voxengo Recorder](https://www.voxengo.com/product/recorder/)
+2. Load it as a VST on your DAW's master bus
+3. Set **Output To** to **MME**
+4. Set the **MME Device** to any output device you're not listening through — it just needs to exist so Discord can see audio coming from the DAW window. A disabled onboard sound card output, a secondary VB-Cable, or any unused MME device works.
+5. Set **Bit Depth** to 32, **Buffer Count** and **Buffer Size** to taste (16/512 is fine)
+6. Click **Start**
+
+Now when you screenshare your DAW window on Discord, Discord captures the audio Voxengo is sending to that MME device. Viewers hear your instruments and Spotify together.
+
 ## Setup
 
 ### Prerequisites
@@ -77,7 +110,7 @@ The bridge uses `blocksize=0` in all modes, which tells PortAudio to deliver fra
 |------|---------|--------------|
 | `-b` | `2.0` | Ring buffer size in seconds. Larger = more latency but more resilient to jitter. 2s is plenty. |
 | `--send-block` | `512` | Frames per send cycle. Smaller = lower latency, more CPU. 512 at 44100 Hz = ~11.6ms per cycle. |
-| `-r` | `44100` | Sample rate. Must match VB-Cable AND FL Studio. |
+| `-r` | `44100` | Sample rate. Must match VB-Cable AND your DAW. |
 | `--ip` | `127.0.0.1` | Target IP. Change for sending to another machine. |
 | `-p` | `58710` | UDP port. Standard ReaStream port. |
 
