@@ -1,7 +1,7 @@
 @echo off
 title ReaStream Bridge
 echo.
-echo  ReaStream Bridge — WASAPI to FL Studio
+echo  ReaStream Bridge
 echo  =======================================
 echo.
 
@@ -23,6 +23,6 @@ if errorlevel 1 (
 )
 
 :: Run bridge with auto-detect
-python "%~dp0reastream_bridge.py" -d auto -b 2.0 --block 512
+python "%~dp0reastream_bridge.py" -d auto -b 2.0 --send-block 512
 
 pause
