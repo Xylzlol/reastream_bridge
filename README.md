@@ -1,22 +1,22 @@
 # ReaStream Bridge
 
-Routes desktop audio into any DAW over UDP using the [ReaStream](https://www.reaper.fm/reaplugs/) protocol. Fixes the WDM/ASIO clock drift crackling you get with VSTHost and similar tools.
+Gets desktop audio (Spotify, YouTube, Discord, etc) into your DAW over UDP using the [ReaStream](https://www.reaper.fm/reaplugs/) protocol. Fixes the WDM/ASIO clock drift crackling that VSTHost and Cantabile can't deal with.
 
-Works with any DAW that can load VST plugins — FL Studio, Reaper, Ableton, Cubase, Bitwig, etc. Just load ReaStream as a VST on a track/mixer channel and set it to receive.
+Works with any DAW that loads VSTs: FL Studio, Reaper, Ableton, Cubase, Bitwig, etc.
 
 ```
 Spotify/Discord/etc → VB-Cable → [ReaStream Bridge] → UDP → Your DAW
 ```
 
-## Why this exists
+## Why
 
-DAWs typically run on ASIO (hardware clock). Desktop apps use WASAPI/WDM (Windows clock). These clocks drift apart over time, causing crackling. This bridge captures from VB-Cable in WASAPI exclusive mode, buffers 2 seconds of audio, and uses a PI controller to keep the buffer centered at 50% — absorbing drift silently.
+I wanted to play live drums for friends over Discord screenshare with Spotify playing along in sync. Tried Cantabile, VSTHost, every other solution I could find, they all crackle eventually because ASIO and WDM clocks drift apart. So I vibe coded this.
 
-## Use case: low-latency instruments + Spotify over Discord screenshare
+DAWs use ASIO (hardware clock), desktop apps use WASAPI/WDM (Windows clock). Over time these drift and you get crackling. This bridge captures from VB-Cable in WASAPI exclusive mode, sits on a 2-second buffer, and runs a PI controller to keep it centered at 50% fill so the drift gets absorbed instead of crackling.
 
-The main problem this solves: you want to use ASIO in your DAW for low-latency live instrument monitoring, but you also want Spotify/YouTube/Discord audio playing inside the DAW so that when you screenshare your DAW window on Discord, viewers hear everything — your instruments and your music — synced together.
+## Discord screenshare setup
 
-The full signal chain:
+The full use case: you want ASIO for low-latency instrument monitoring, but you also want Spotify/YouTube playing inside your DAW so when you screenshare on Discord, viewers hear your instruments and music together.
 
 ```
 Spotify → VB-Cable → [ReaStream Bridge] → UDP → DAW mixer (ReaStream receive)
@@ -27,108 +27,73 @@ Guitar/Mic → Audio Interface (ASIO) ──────────→ DAW mixe
                                                       ↓
                                               Voxengo Recorder → MME device
                                                       ↓
-                                              Discord screenshare captures DAW window + audio
+                                              Discord screenshare picks up the DAW window audio
 ```
 
-Your instruments stay on ASIO with minimal latency. Spotify audio arrives through the bridge with ~2s delay (not audible to Discord viewers since they're hearing everything through the same output). Discord screenshare picks up the DAW window audio via [Voxengo Recorder](https://www.voxengo.com/product/recorder/).
+Instruments stay on ASIO with no added latency. Spotify comes through the bridge about 2 seconds behind, but Discord viewers don't notice since they hear everything from the same output.
 
-### Voxengo Recorder setup
-
-[Voxengo Recorder](https://www.voxengo.com/product/recorder/) is a free VST plugin that mirrors your DAW's master output to an MME device, which is what Discord can capture during screenshare.
+To get Discord to actually hear audio from your DAW window, you need [Voxengo Recorder](https://www.voxengo.com/product/recorder/) (free VST). It copies your DAW's master output to an MME device, and Discord can capture that when you screenshare.
 
 ![Voxengo Recorder settings](voxengosettings.png)
 
-1. Download and install [Voxengo Recorder](https://www.voxengo.com/product/recorder/)
-2. Load it as a VST on your DAW's master bus
-3. Set **Output To** to **MME**
-4. Set the **MME Device** to any output device you're not listening through — it just needs to exist so Discord can see audio coming from the DAW window. A disabled onboard sound card output, a secondary VB-Cable, or any unused MME device works.
-5. Set **Bit Depth** to 32, **Buffer Count** and **Buffer Size** to taste (16/512 is fine)
-6. Click **Start**
-
-Now when you screenshare your DAW window on Discord, Discord captures the audio Voxengo is sending to that MME device. Viewers hear your instruments and Spotify together.
+Install it, put it on your master bus, set Output To to MME, and pick any MME device you're not listening through (disabled onboard audio, a second VB-Cable, doesn't matter). Set Bit Depth to 32, Buffer Count 16, Buffer Size 512, hit Start. Then screenshare the DAW window on Discord.
 
 ## Setup
 
-### Prerequisites
-- [VB-Cable](https://vb-audio.com/Cable/) — virtual audio cable (free)
-- [ReaPlugs VST](https://www.reaper.fm/reaplugs/) — contains the ReaStream plugin
-- Python 3.10+
+You need [VB-Cable](https://vb-audio.com/Cable/) (free virtual audio cable), [ReaPlugs VST](https://www.reaper.fm/reaplugs/) (has the ReaStream plugin), and Python 3.10+.
 
-### Install
 ```
 pip install -r requirements.txt
 ```
 
-### Configure
+Set VB-Cable's sample rate to 44100 Hz in Windows Sound Settings (both Playback "CABLE Input" and Recording "CABLE Output" under Properties → Advanced). Point Spotify or whatever app at "CABLE Input (VB-Cable)" as its output device.
 
-1. **VB-Cable sample rate**: Open Windows Sound Settings → Playback → "CABLE Input" → Properties → Advanced → set to **44100 Hz**. Do the same for Recording → "CABLE Output".
+In your DAW, make sure the sample rate is 44100 Hz (has to match VB-Cable). Install [ReaPlugs](https://www.reaper.fm/reaplugs/), throw ReaStream on any mixer channel, set it to Receive audio/MIDI, tick Enabled, leave the identifier as `default`.
 
-2. **Desktop app output**: Set whatever app you want to route (Spotify, Discord, browser, etc.) to output to "CABLE Input (VB-Cable)".
+![ReaStream plugin settings](reastreamsettings.png)
 
-3. **ReaStream plugin in your DAW**: Download and install [ReaPlugs VST](https://www.reaper.fm/reaplugs/). Add ReaStream to any mixer channel — it doesn't have to be the master, any insert/channel works. Set it to **Receive audio/MIDI**, check **Enabled**, and leave the identifier as `default`.
+If you're on FL Studio, you also need to open the ReaStream plugin window, click the gear icon (wrapper settings), go to the Troubleshooting tab, and turn on "Use fixed size buffers". FL sends variable-length blocks by default and ReaStream drops UDP packets because of it. Other DAWs don't need this.
 
-   ![ReaStream plugin settings](reastreamsettings.png)
-
-4. **FL Studio only — fixed size buffers**: Open the ReaStream plugin window, click the **gear icon** (VST wrapper settings), go to the **Troubleshooting** tab, and enable **Use fixed size buffers**. Without this, FL Studio feeds ReaStream variable-length audio blocks, which causes it to drop incoming UDP packets and you'll get silence or stuttering. This doesn't affect other DAWs.
-
-   ![FL Studio VST Troubleshooting — enable Use fixed size buffers](fixedsizebuffers.png)
+![FL Studio VST Troubleshooting](fixedsizebuffers.png)
 
 ### The `default` identifier
 
-ReaStream uses a text identifier to match senders and receivers on the same network. Both sides must use the same string. This bridge sends on identifier `default` by default, which matches ReaStream's own default. If you're running multiple bridges or have other ReaStream traffic, change it with `--reastream-id myname` and set the same string in the ReaStream plugin.
+ReaStream matches senders and receivers by a text identifier. Both sides need the same string. This bridge uses `default`, same as ReaStream's own default. Change it with `--reastream-id something` if you need to.
 
-### Run
+### Running it
 
-You can just double-click `reastream_bridge.py` if Python is in your PATH, or run it from the command line for more control:
+Double-click `reastream_bridge.py` or run from command line:
 
 ```
 python reastream_bridge.py -d auto              # auto-detect VB-Cable
 python reastream_bridge.py --list               # list audio devices
-python reastream_bridge.py -d auto --test-tone  # 440 Hz sine to verify the chain
-python reastream_bridge.py -d auto -r 48000     # match your DAW at 48k
+python reastream_bridge.py -d auto --test-tone  # 440 Hz sine to test the chain
+python reastream_bridge.py -d auto -r 48000     # if your DAW runs at 48k
 ```
 
-`start_bridge.bat` does the same thing but also checks for Python and installs dependencies if missing — handy if you're setting this up for the first time or on someone else's machine.
+`start_bridge.bat` does the same but checks for Python and installs deps first, useful for first-time setup.
 
-### System tray mode
-```
-pythonw bridge_tray.pyw
-```
-Green "R" icon in the tray. Hover for buffer status, right-click to quit.
+For background operation: `pythonw bridge_tray.pyw` puts a green "R" in the system tray, hover for buffer status, right-click to quit. `install_startup.bat` makes it run on login, `remove_startup.bat` undoes that.
 
-### Auto-start on login
-Run `install_startup.bat` — creates a startup shortcut for the tray app. Remove with `remove_startup.bat`.
+## WASAPI modes
 
-## Deep setup — WASAPI exclusive mode
+The bridge tries WASAPI exclusive first (bypasses Windows mixer, direct device access, best mode). VB-Cable's sample rate in Windows settings has to match the `--rate` arg (default 44100). If exclusive fails it falls back to shared + auto_convert, then plain shared, but I haven't tested those.
 
-The bridge tries three capture modes in order:
+All modes use `blocksize=0` so PortAudio delivers frames as they come instead of rebuffering into fixed chunks. This avoids the frame-drop issue VSTHost has.
 
-1. **WASAPI exclusive** — bypasses the Windows audio mixer entirely. Direct device access, no resampling, no mixing. This is the best mode. For it to work, VB-Cable's sample rate in Windows Sound Settings *must exactly match* the `--rate` argument (default 44100).
+### Flags
 
-2. **WASAPI shared + auto_convert** — falls back here if exclusive fails (e.g. another app has exclusive access). Windows handles resampling. Untested — may or may not work well.
+| Flag | Default | |
+|------|---------|--|
+| `-b` | `2.0` | Buffer size in seconds |
+| `--send-block` | `512` | Frames per send cycle (512 @ 44100 Hz ≈ 11.6ms) |
+| `-r` | `44100` | Sample rate, match VB-Cable and your DAW |
+| `--ip` | `127.0.0.1` | Target IP, change for network streaming |
+| `-p` | `58710` | UDP port |
 
-3. **WASAPI shared (plain)** — last resort. Untested. May have sample rate mismatches.
+### Debug
 
-The bridge uses `blocksize=0` in all modes, which tells PortAudio to deliver frames as they arrive from the hardware instead of rebuffering into fixed-size chunks. This avoids the frame-drop bug that plagues VSTHost.
-
-### Tuning
-
-| Flag | Default | What it does |
-|------|---------|--------------|
-| `-b` | `2.0` | Ring buffer size in seconds. Larger = more latency but more resilient to jitter. 2s is plenty. |
-| `--send-block` | `512` | Frames per send cycle. Smaller = lower latency, more CPU. 512 at 44100 Hz = ~11.6ms per cycle. |
-| `-r` | `44100` | Sample rate. Must match VB-Cable AND your DAW. |
-| `--ip` | `127.0.0.1` | Target IP. Change for sending to another machine. |
-| `-p` | `58710` | UDP port. Standard ReaStream port. |
-
-### Debugging
-
-```
-python reastream_bridge.py --sniff         # listen for incoming ReaStream packets
-python reastream_bridge.py --sniff --sniff-count 20
-```
-
-The bridge prints stats every 5 seconds: buffer fill, capture rate, output rate, PI correction factor, and underrun count. If the correction factor drifts far from 1.00000, something is wrong with sample rate matching.
+`python reastream_bridge.py --sniff` listens for incoming ReaStream packets. Stats print every 5 seconds showing buffer fill, capture/output rate, PI correction, and underruns. If correction drifts far from 1.00000, your sample rates don't match somewhere.
 
 ## Wire format
 
@@ -142,7 +107,7 @@ Offset  Type        Field
 40      uint8       Channels
 41      uint32      Sample rate
 45      uint16      Audio byte count
-47      float32[]   Audio data (non-interleaved: all ch0 samples, then all ch1 samples)
+47      float32[]   Audio data (non-interleaved: all ch0 samples, then all ch1)
 ```
 
 ## License
