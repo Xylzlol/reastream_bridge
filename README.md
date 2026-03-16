@@ -46,7 +46,9 @@ You need [VB-Cable](https://vb-audio.com/Cable/) (free virtual audio cable), [Re
 pip install -r requirements.txt
 ```
 
-Set VB-Cable's sample rate to 44100 Hz in Windows Sound Settings (both Playback "CABLE Input" and Recording "CABLE Output" under Properties → Advanced). Point Spotify or whatever app at "CABLE Input (VB-Cable)" as its output device.
+Set VB-Cable's sample rate to 44100 Hz in Windows Sound Settings (both Playback "CABLE Input" and Recording "CABLE Output" under Properties → Advanced).
+
+Then you need to route Spotify (or whatever app you want audio from) to VB-Cable. Go to Windows Settings → System → Sound → Volume mixer (or just search "volume mixer" in Start). Find Spotify in the app list and change its output device to "CABLE Input (VB-Cable)". You can do this per-app so only Spotify goes through VB-Cable while everything else stays on your normal speakers/headphones.
 
 In your DAW, make sure the sample rate is 44100 Hz (has to match VB-Cable). Install [ReaPlugs](https://www.reaper.fm/reaplugs/), throw ReaStream on any mixer channel, set it to Receive audio/MIDI, tick Enabled, leave the identifier as `default`.
 
