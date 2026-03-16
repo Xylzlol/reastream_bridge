@@ -112,6 +112,19 @@ Offset  Type        Field
 47      float32[]   Audio data (non-interleaved: all ch0 samples, then all ch1)
 ```
 
+## Related problems this fixes
+
+If you got here by googling one of these, you're in the right place:
+
+- Spotify crackling in FL Studio when using ASIO
+- VSTHost or Cantabile audio popping/crackling over time
+- How to route desktop audio into a DAW without clock drift
+- Playing along to Spotify with ASIO and it sounds fine at first but starts crackling after a few minutes
+- Discord screenshare not picking up DAW audio
+- VB-Cable to FL Studio crackling
+- WASAPI/WDM and ASIO clock drift problem
+- How to get Spotify/YouTube/Discord audio into FL Studio/Reaper/Ableton
+
 ## License
 
 MIT
