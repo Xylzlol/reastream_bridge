@@ -3,11 +3,11 @@
 #include "LockFreeRingBuffer.h"
 #include "UdpReceiver.h"
 
-class ReaStreamReceiverProcessor : public juce::AudioProcessor
+class NetStreamReceiverProcessor : public juce::AudioProcessor
 {
 public:
-    ReaStreamReceiverProcessor();
-    ~ReaStreamReceiverProcessor() override;
+    NetStreamReceiverProcessor();
+    ~NetStreamReceiverProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -16,7 +16,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "ReaStream Receiver"; }
+    const juce::String getName() const override { return "NetStream Receiver"; }
     bool acceptsMidi()  const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -49,5 +49,5 @@ private:
     int jitterBufferFrames = 0;
     bool primed = false; // wait until jitter buffer is filled before outputting
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ReaStreamReceiverProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NetStreamReceiverProcessor)
 };

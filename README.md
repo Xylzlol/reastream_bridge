@@ -112,15 +112,15 @@ Offset  Type        Field
 47      float32[]   Audio data (non-interleaved: all ch0 samples, then all ch1)
 ```
 
-## Custom ReaStream Receiver VST (for ultra-low buffer sizes)
+## NetStream Receiver VST (for ultra-low buffer sizes)
 
 The Cockos ReaStream receiver VST works fine at buffer sizes of 64+, but if you run your ASIO buffer at 32 or lower (for live drums, guitar, etc), it crackles. This is because the original plugin does UDP socket I/O directly inside the audio callback — at buffer size 8 on a 44.1k session, `processBlock` runs every 0.18ms and there's no room for a `recvfrom()` syscall to complete without missing a deadline.
 
-The `ReaStreamReceiver/` folder contains a custom JUCE VST3 that fixes this. It's a drop-in replacement that speaks the same ReaStream protocol on the same port.
+The `NetStreamReceiver/` folder contains a custom JUCE VST3 that fixes this. It's a drop-in replacement that speaks the same protocol on the same port.
 
 **What's different:**
 
-| | Cockos ReaStream | This receiver |
+| | Cockos ReaStream | NetStream Receiver |
 |---|---|---|
 | Network I/O | Inside `processBlock` (audio thread) | Dedicated high-priority thread |
 | Buffering | Fixed internal buffer | Lock-free SPSC ring buffer with configurable jitter buffer |
@@ -134,7 +134,7 @@ The network thread runs a tight `recvfrom()` loop and pushes parsed audio into a
 You need [JUCE](https://github.com/juce-framework/JUCE) and Visual Studio Build Tools (MSVC — JUCE doesn't support MinGW).
 
 ```bash
-cd ReaStreamReceiver
+cd NetStreamReceiver
 cmake -B build -G Ninja -DJUCE_DIR=C:/JUCE -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
@@ -143,7 +143,7 @@ Or just run `build_vst.bat` if you have VS2022 Build Tools installed — it sets
 
 ### Using it
 
-Rescan plugins in your DAW, drop **"ReaStream Receiver"** on a mixer track instead of the Cockos ReaStream. Same protocol, same port (58710), same `default` identifier. The bridge script doesn't need any changes.
+Rescan plugins in your DAW, drop **"NetStream Receiver"** on a mixer track instead of the Cockos ReaStream. Same protocol, same port (58710), same `default` identifier. The bridge script doesn't need any changes.
 
 The plugin shows a small status panel with buffer fill, packet count, underruns, and sample rate. If underruns stay at 0, you're good.
 
@@ -161,7 +161,7 @@ If you got here by googling one of these, you're in the right place:
 - How to get Spotify/YouTube/Discord audio into FL Studio/Reaper/Ableton
 - ReaStream crackling at low buffer sizes
 - ReaStream popping at buffer size 32 or lower
-- Custom ReaStream receiver VST for low latency
+- Custom ReaStream receiver VST alternative for low latency
 
 ## License
 
