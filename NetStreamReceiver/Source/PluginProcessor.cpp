@@ -1,18 +1,18 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-ReaStreamReceiverProcessor::ReaStreamReceiverProcessor()
+NetStreamReceiverProcessor::NetStreamReceiverProcessor()
     : AudioProcessor (BusesProperties()
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
 }
 
-ReaStreamReceiverProcessor::~ReaStreamReceiverProcessor()
+NetStreamReceiverProcessor::~NetStreamReceiverProcessor()
 {
     receiver.stop();
 }
 
-void ReaStreamReceiverProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
+void NetStreamReceiverProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
 {
     // Size jitter buffer: JITTER_BUFFER_MS worth of frames, minimum 256
     jitterBufferFrames = (std::max) (256, static_cast<int> (sampleRate * JITTER_BUFFER_MS / 1000.0));
@@ -30,12 +30,12 @@ void ReaStreamReceiverProcessor::prepareToPlay (double sampleRate, int /*samples
     receiver.start();
 }
 
-void ReaStreamReceiverProcessor::releaseResources()
+void NetStreamReceiverProcessor::releaseResources()
 {
     receiver.stop();
 }
 
-void ReaStreamReceiverProcessor::processBlock (juce::AudioBuffer<float>& buffer,
+void NetStreamReceiverProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                                 juce::MidiBuffer&)
 {
     const int numSamples  = buffer.getNumSamples();
@@ -80,24 +80,24 @@ void ReaStreamReceiverProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         buffer.clear (c, 0, numSamples);
 }
 
-juce::AudioProcessorEditor* ReaStreamReceiverProcessor::createEditor()
+juce::AudioProcessorEditor* NetStreamReceiverProcessor::createEditor()
 {
-    return new ReaStreamReceiverEditor (*this);
+    return new NetStreamReceiverEditor (*this);
 }
 
-void ReaStreamReceiverProcessor::getStateInformation (juce::MemoryBlock& destData)
+void NetStreamReceiverProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     // Save port and identifier
-    juce::XmlElement xml ("ReaStreamReceiverState");
+    juce::XmlElement xml ("NetStreamReceiverState");
     xml.setAttribute ("port", DEFAULT_PORT);
     xml.setAttribute ("identifier", juce::String ("default"));
     copyXmlToBinary (xml, destData);
 }
 
-void ReaStreamReceiverProcessor::setStateInformation (const void* data, int sizeInBytes)
+void NetStreamReceiverProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     auto xml = getXmlFromBinary (data, sizeInBytes);
-    if (xml != nullptr && xml->hasTagName ("ReaStreamReceiverState"))
+    if (xml != nullptr && xml->hasTagName ("NetStreamReceiverState"))
     {
         int port = xml->getIntAttribute ("port", DEFAULT_PORT);
         auto id  = xml->getStringAttribute ("identifier", "default");
@@ -110,5 +110,5 @@ void ReaStreamReceiverProcessor::setStateInformation (const void* data, int size
 // --- Plugin instantiation ---
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new ReaStreamReceiverProcessor();
+    return new NetStreamReceiverProcessor();
 }

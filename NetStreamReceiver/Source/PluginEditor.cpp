@@ -1,13 +1,13 @@
 #include "PluginEditor.h"
 
-ReaStreamReceiverEditor::ReaStreamReceiverEditor (ReaStreamReceiverProcessor& p)
+NetStreamReceiverEditor::NetStreamReceiverEditor (NetStreamReceiverProcessor& p)
     : AudioProcessorEditor (p), proc (p)
 {
     setSize (320, 160);
     startTimerHz (10); // 10 fps refresh
 }
 
-void ReaStreamReceiverEditor::timerCallback()
+void NetStreamReceiverEditor::timerCallback()
 {
     fillFrames = proc.bufferFillFrames.load();
     capacity   = proc.bufferCapacityFrames.load();
@@ -19,7 +19,7 @@ void ReaStreamReceiverEditor::timerCallback()
     repaint();
 }
 
-void ReaStreamReceiverEditor::paint (juce::Graphics& g)
+void NetStreamReceiverEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff1e1e2e)); // dark background
 
@@ -27,7 +27,7 @@ void ReaStreamReceiverEditor::paint (juce::Graphics& g)
 
     // Title
     g.setColour (juce::Colour (0xffcdd6f4));
-    g.drawText ("ReaStream Receiver", getLocalBounds().removeFromTop (28),
+    g.drawText ("NetStream Receiver", getLocalBounds().removeFromTop (28),
                 juce::Justification::centred);
 
     // Stats
@@ -55,5 +55,5 @@ void ReaStreamReceiverEditor::paint (juce::Graphics& g)
     line ("Underruns",  juce::String (underruns),
           underruns > 0 ? juce::Colour (0xfff38ba8) : juce::Colour (0xffa6e3a1));
     line ("Sample Rate", sampleRate > 0 ? juce::String (sampleRate) + " Hz" : "---");
-    line ("Port",       juce::String (ReaStreamReceiverProcessor::DEFAULT_PORT));
+    line ("Port",       juce::String (NetStreamReceiverProcessor::DEFAULT_PORT));
 }
